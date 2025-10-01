@@ -24,7 +24,7 @@ def main():
         operacao = "divisão"
     else:
         resultado = "Opção inválida"
-        operacao = "Inválida"
+        operacao = "Inválida" # teste
     print(f"{operacao} de {num1} e {num2} é: {resultado}")
 
 # if main como função principal
