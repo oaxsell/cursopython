@@ -89,9 +89,18 @@
     success_msg: "Encontrados {{ lista_codigo_svc_aplic | length }} código(s) para {{ solucao_servico_form }}"
 
 # 6. Selecionar o último código da aplicação (baseado em ordem alfabética)
-- name: Retornando o último código associado ao servico-aplicacao
+
+- name: Retornando o último código com 3 caracteres ou o último disponível
   set_fact:
-    ultimo_codigo_svc_aplic: "{{ lista_codigo_svc_aplic | last }}"
+    ultimo_codigo_svc_aplic: >-
+      {{
+        (lista_codigo_svc_aplic
+          | select('match', '^.{3}$')
+          | list
+          | last
+        )
+        | default(lista_codigo_svc_aplic | last)
+      }}
 
 # 7. Convertendo o último código em valor numérico (extraindo últimos dígitos)
 - name: Extraindo o último número dos códigos da solução-serviço
