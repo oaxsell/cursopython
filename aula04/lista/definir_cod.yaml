@@ -1,0 +1,98 @@
+# ==============================================================================
+# ETAPA 1.2: DEFINIR O CÓDIGO DA APLICAÇÃO
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# ETAPA 1.2.1: LER CONTEÚDO DO ARQUIVO DE CÓDIGOS DAS APLICAÇÕES
+# ------------------------------------------------------------------------------
+
+# 1. Clonar o repositório psc/helm_charts/psc-chart-k8s-meta-solucao-servico-lib
+- name: Clonando repo de metadados de Solucao-Servico
+  git:
+    repo: "https://{{ gitlabs[git].user }}:{{ gitlabs[git].token }}@{{ gitlabs[git].url.split('//')[-1] }}/{{ psc_chart_k8s_meta_solucao_lib_url }}"
+    dest: "{{ psc_chart_k8s_meta_solucao_lib_local_dir }}/"
+    single_branch: yes
+    version: master
+  no_log: true
+
+# 2. Ler o arquivo onde estão os códigos das aplicações
+- name: Lendo o conteúdo do arquivo values (códigos das aplicações)
+  ansible.builtin.slurp:
+    src: "{{ psc_chart_k8s_meta_solucao_lib_local_dir }}/values.yaml"
+  register: serv_aplic_file
+
+# 3. Carregar o conteúdo lido de JSON para YAML
+- name: Carregando o conteúdo do YAML
+  set_fact:
+    yaml_data: "{{ serv_aplic_file.content | b64decode | from_yaml }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 1.2.2: GERANDO O CÓDIGO DA APLICAÇÃO
+# ------------------------------------------------------------------------------
+
+# 1. Criar lista com os códigos associados à aplicação
+- name: Processando códigos de solucao-servico por path
+  set_fact:
+    serv_aplic_codigos: "{{ yaml_data | processamento_solucao() }}"
+
+# 2. Selecionar todos os códigos únicos (baseado em ordem alfabética)
+- name: Criando lista com todos os códigos da solução-serviço
+  set_fact:
+    todos_codigos_svc: "{{ serv_aplic_codigos
+                          | map(attribute='code')
+                          | select('match', '^[a-zA-Z]\\d{2}$')
+                          | unique
+                          | sort
+                          | list }}"
+
+# 3. Convertendo os códigos em valores numéricos (extraindo todos os dígitos)
+- name: Listando os dígitos dos códigos das solucao-servico
+  set_fact:
+    todos_codigos_svc_numeros: "{{ todos_codigos_svc
+                                   | map('regex_replace', '[^0-9]', '')
+                                   | select('string')
+                                   | select('!=', '')
+                                   | map('int')
+                                   | list }}"
+
+# 4. Filtrando apenas os códigos da solução-serviço definida no formulário
+- name: Retornando lista de códigos associados ao servico-aplicacao
+  set_fact:
+    lista_codigo_svc_aplic: "{{ serv_aplic_codigos
+                               | selectattr('path', 'equalto', solucao_servico_form)
+                               | map(attribute='code')
+                               | unique
+                               | sort
+                               | list }}"
+
+# 5. Validar se existem códigos para a solução-serviço
+- name: Validando se existem códigos para a solução-serviço
+  assert:
+    that:
+      - lista_codigo_svc_aplic | length > 0
+    fail_msg: "Nenhum código encontrado para a solução-serviço: {{ solucao_servico_form }}"
+    success_msg: "Encontrados {{ lista_codigo_svc_aplic | length }} código(s) para {{ solucao_servico_form }}"
+
+# 6. Selecionar o último código da aplicação (baseado em ordem alfabética)
+- name: Retornando o último código associado ao servico-aplicacao
+  set_fact:
+    ultimo_codigo_svc_aplic: "{{ lista_codigo_svc_aplic | last }}"
+
+# 7. Convertendo o último código em valor numérico (extraindo últimos dígitos)
+- name: Extraindo o último número dos códigos da solução-serviço
+  set_fact:
+    ultimo_codigo_svc_numero: "{{ ultimo_codigo_svc_aplic | regex_replace('^[a-zA-Z]', '') | int }}"
+
+# 8. Exibir informações para debug (opcional - remover em produção)
+- name: Exibindo código gerado
+  debug:
+    msg:
+      - "Solução-Serviço: {{ solucao_servico_form }}"
+      - "Total de códigos encontrados: {{ lista_codigo_svc_aplic | length }}"
+      - "Códigos disponíveis: {{ lista_codigo_svc_aplic }}"
+      - "Último código (alfanumérico): {{ ultimo_codigo_svc_aplic }}"
+      - "Último código (numérico): {{ ultimo_codigo_svc_numero }}"
+
+# ==============================================================================
+# FIM DA ETAPA 1.2: DEFINIR O CÓDIGO DA APLICAÇÃO
+# ==============================================================================

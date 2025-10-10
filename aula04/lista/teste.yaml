@@ -1,0 +1,171 @@
+# ==============================================================================
+# ETAPA 2.1: DEFINIR NOME DO CLUSTER
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# VALIDAÇÕES INICIAIS - Verificar variáveis obrigatórias
+# ------------------------------------------------------------------------------
+
+- name: Validando variáveis obrigatórias
+  ansible.builtin.assert:
+    that:
+      - solucao_servico is defined
+      - cluster_enviroment is defined
+      - cluster_site_codigo is defined
+      - ultimo_codigo_svc_aplic is defined
+    fail_msg: "Variáveis obrigatórias não foram definidas"
+    success_msg: "Todas as variáveis obrigatórias estão definidas"
+
+- name: Inicializando variáveis padrão
+  ansible.builtin.set_fact:
+    prefix: "{{ prefix | default('k8s') }}"
+    tipo_cluster: "{{ tipo_cluster | default('aplicacoes') }}"
+    indice_ultimo_cluster_svc: "{{ indice_ultimo_cluster_svc | default('') }}"
+    prefixo_ultimo_cluster_svc: "{{ prefixo_ultimo_cluster_svc | default('') }}"
+    numero_ultimo_cluster_svc: "{{ numero_ultimo_cluster_svc | default(0) }}"
+    numero_ultimo_cluster_geral: "{{ numero_ultimo_cluster_geral | default(0) }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.1: DEFINIR PREFIXOS E ÍNDICES PARA CLUSTER
+# ------------------------------------------------------------------------------
+
+# 1. Verificar se o código está no padrão esperado (ex: a01, b23, z99)
+- name: Verificando padrão do código da solução-serviço
+  ansible.builtin.set_fact:
+    codigo_esta_no_padrao: "{{ ultimo_codigo_svc_aplic is match('^[a-z][0-9]{2}$') }}"
+
+# 2. Definir alfabeto para manipulação de índices
+- name: Definindo alfabeto para cálculo de índices
+  ansible.builtin.set_fact:
+    alphabet: "{{ 'abcdefghijklmnopqrstuvwxyz' | list }}"
+
+- name: Validando índice no alphabet
+  ansible.builtin.assert:
+    that:
+      - indice_ultimo_cluster_svc in alphabet or indice_ultimo_cluster_svc in ['', 'z', 'aa']
+    fail_msg: "Índice inválido: {{ indice_ultimo_cluster_svc }}"
+
+# 3. Definir mapa de prefixos por tipo de cluster
+- name: Identificando tipo de solução
+  ansible.builtin.set_fact:
+    eh_k8s_mgt: "{{ 'k8s-mgt' in solucao_servico }}"
+
+- name: Definindo prefixos por tipo de cluster
+  ansible.builtin.set_fact:
+    prefixo_por_tipo:
+      aplicacoes: "{{ 'a' if eh_k8s_mgt else (prefixo_ultimo_cluster_svc if codigo_esta_no_padrao else 'b') }}"
+      temporario: "{{ prefixo_ultimo_cluster_svc if codigo_esta_no_padrao else 'z' }}"
+      psc: "{{ 'a' if (eh_k8s_mgt and not codigo_esta_no_padrao) else (prefixo_ultimo_cluster_svc if codigo_esta_no_padrao else 'b') }}"
+
+# 4. Calcular o número do próximo cluster geral
+- name: Calculando número do próximo cluster geral
+  ansible.builtin.set_fact:
+    numero_proximo_cluster_geral: "{{ numero_ultimo_cluster_geral | int + 1 }}"
+
+# 5. Determinar o prefixo do cluster baseado no último número
+- name: Definindo o prefixo alfabético do cluster
+  ansible.builtin.set_fact:
+    prefixo_cluster: "{{ prefixo_ultimo_cluster_svc | proximo_prefixo(numero_cluster, prefixo_por_tipo) }}"
+
+# 6. Calcular o próximo índice alfabético do cluster
+- name: Calculando próximo índice do cluster
+  ansible.builtin.set_fact:
+    indice_cluster: "{{ indice_ultimo_cluster_svc | proximo_indice(alphabet) }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.2: CRIANDO ESTRUTURA DE CÓDIGO DO CLUSTER
+# ------------------------------------------------------------------------------
+
+# 1. Verirficar se o número do cluster deve ser incrementado
+- name: Verificando o padrao do número do cluster
+  ansible.builtin.set_fact:
+    usa_proximo_numero: >-
+      {{
+        not codigo_esta_no_padrao and
+        numero_proximo_cluster_geral | int < 100 and
+        prefixo_cluster != 'z'
+      }}
+
+# 2. Definir o número do cluster (com dois dígitos)
+- name: Determinando número do cluster
+  ansible.builtin.set_fact:
+    numero_cluster: >-
+      {{
+        '%02d' | format(
+          numero_proximo_cluster_geral | int if usa_proximo_numero
+          else numero_ultimo_cluster_svc | int
+        )
+      }}
+
+# 3. Montar código completo do cluster (prefixo + número + índice)
+- name: Montando código do cluster
+  ansible.builtin.set_fact:
+    codigo_cluster: "{{ prefixo_cluster }}{{ numero_cluster }}{{ indice_cluster }}"
+
+# 4. Limpar espaços e caracteres indesejados
+- name: Normalizando código do cluster
+  ansible.builtin.set_fact:
+    codigo_cluster_limpo: "{{ codigo_cluster | trim | regex_replace('[\\s\"]', '') }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.3: GERANDO O NOME DO CLUSTER
+# ------------------------------------------------------------------------------
+
+# 1. Gerar nome completo do cluster
+- name: Gerando nome completo do cluster
+  ansible.builtin.set_fact:
+    nome_cluster_gerado: "{{ prefix }}{{ cluster_enviroment }}{{ cluster_site_codigo }}{{ codigo_cluster_limpo }}"
+
+# 2. Validar se o nome está no padrão esperado
+- name: Validando padrão do nome do cluster
+  ansible.builtin.set_fact:
+    nome_cluster_valido: "{{ nome_cluster_gerado is match('^k8s(des|hml|prd)(bb1|bb2|az1|az2|gc1)([a-z][0-9]{2}[a-z])$') }}"
+
+# 3. Definir o nome final do cluster apenas se válido
+- name: Definindo nome final do cluster
+  ansible.builtin.set_fact:
+    nome_do_cluster: "{{ nome_cluster_gerado if nome_cluster_valido else '' }}"
+
+# 4. Falhar se o nome não for válido
+- name: Validando nome gerado do cluster
+  ansible.builtin.assert:
+    that:
+      - nome_cluster_valido | bool
+      - nome_do_cluster != ''
+    fail_msg: |
+      Nome do cluster inválido: {{ nome_cluster_gerado }}
+      Padrão esperado: k8s(des|hml|prd)(bb1|bb2|az1|az2|gc1)[a-z][0-9]{2}[a-z]
+    success_msg: "Nome do cluster válido: {{ nome_do_cluster }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.4: EXIBINDO INFORMAÇÕES DE DEBUG
+# ------------------------------------------------------------------------------
+
+- name: Exibindo informações do cluster gerado
+  ansible.builtin.debug:
+    msg:
+      - "=== INFORMAÇÕES DO CLUSTER GERADO ==="
+      - "Nome do Cluster: {{ nome_do_cluster }}"
+      - "Código do Cluster: {{ codigo_cluster_limpo }}"
+      - "Prefixo: {{ prefixo_cluster }}"
+      - "Número: {{ numero_cluster }}"
+      - "Índice: {{ indice_cluster }}"
+      - "---"
+      - "Último Cluster (Serviço): {{ nome_ultimo_cluster_svc | default('N/A') }}"
+      - "Último Índice (Serviço): {{ indice_ultimo_cluster_svc | default('N/A') }}"
+      - "Último Código (Aplicação): {{ ultimo_codigo_svc_aplic }}"
+      - "Código no Padrão: {{ codigo_esta_no_padrao }}"
+  verbosity: 1
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.5: ATUALIZAR METADADOS SE NECESSÁRIO
+# ------------------------------------------------------------------------------
+
+- name: Atualizando código da solução-serviço
+  ansible.builtin.include_tasks: tasks/control/update_svc_lib.yaml
+  when:
+    - not codigo_esta_no_padrao | bool
+
+# ==============================================================================
+# FIM DA ETAPA 2.1: DEFINIR NOME DO CLUSTER
+# ==============================================================================
