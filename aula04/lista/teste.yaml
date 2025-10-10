@@ -25,6 +25,14 @@
     numero_ultimo_cluster_svc: "{{ numero_ultimo_cluster_svc | default(0) }}"
     numero_ultimo_cluster_geral: "{{ numero_ultimo_cluster_geral | default(0) }}"
 
+- name: Definindo regex para validação do nome do cluster
+  ansible.builtin.set_fact:
+    regex_nome_cluster: "^k8s(des|hml|prd)(bb1|bb2|az1|az2|gc1)([a-z][0-9]{2}[a-z])$"
+
+- name: Definindo regex para validação do código do cluster
+  ansible.builtin.set_fact:
+    regex_codigo_cluster: "^[a-z][0-9]{2}$"
+
 # ------------------------------------------------------------------------------
 # ETAPA 2.1.1: DEFINIR PREFIXOS E ÍNDICES PARA CLUSTER
 # ------------------------------------------------------------------------------
@@ -32,7 +40,7 @@
 # 1. Verificar se o código está no padrão esperado (ex: a01, b23, z99)
 - name: Verificando padrão do código da solução-serviço
   ansible.builtin.set_fact:
-    codigo_esta_no_padrao: "{{ ultimo_codigo_svc_aplic is match('^[a-z][0-9]{2}$') }}"
+    codigo_esta_no_padrao: "{{ (ultimo_codigo_svc_aplic | string) is match(regex_codigo_cluster) }}"
 
 # 2. Definir alfabeto para manipulação de índices
 - name: Definindo alfabeto para cálculo de índices
@@ -62,21 +70,7 @@
   ansible.builtin.set_fact:
     numero_proximo_cluster_geral: "{{ numero_ultimo_cluster_geral | int + 1 }}"
 
-# 5. Determinar o prefixo do cluster baseado no último número
-- name: Definindo o prefixo alfabético do cluster
-  ansible.builtin.set_fact:
-    prefixo_cluster: "{{ prefixo_ultimo_cluster_svc | proximo_prefixo(numero_cluster, prefixo_por_tipo) }}"
-
-# 6. Calcular o próximo índice alfabético do cluster
-- name: Calculando próximo índice do cluster
-  ansible.builtin.set_fact:
-    indice_cluster: "{{ indice_ultimo_cluster_svc | proximo_indice(alphabet) }}"
-
-# ------------------------------------------------------------------------------
-# ETAPA 2.1.2: CRIANDO ESTRUTURA DE CÓDIGO DO CLUSTER
-# ------------------------------------------------------------------------------
-
-# 1. Verirficar se o número do cluster deve ser incrementado
+# 5. Verirficar se o número do cluster deve ser incrementado
 - name: Verificando o padrao do número do cluster
   ansible.builtin.set_fact:
     usa_proximo_numero: >-
@@ -86,7 +80,7 @@
         prefixo_cluster != 'z'
       }}
 
-# 2. Definir o número do cluster (com dois dígitos)
+# 6. Definir o número do cluster (com dois dígitos)
 - name: Determinando número do cluster
   ansible.builtin.set_fact:
     numero_cluster: >-
@@ -97,12 +91,26 @@
         )
       }}
 
-# 3. Montar código completo do cluster (prefixo + número + índice)
+# 7. Determinar o prefixo do cluster baseado no último número
+- name: Definindo o prefixo alfabético do cluster
+  ansible.builtin.set_fact:
+    prefixo_cluster: "{{ prefixo_ultimo_cluster_svc | proximo_prefixo(numero_cluster, prefixo_por_tipo) }}"
+
+# 8. Calcular o próximo índice alfabético do cluster
+- name: Calculando próximo índice do cluster
+  ansible.builtin.set_fact:
+    indice_cluster: "{{ indice_ultimo_cluster_svc | proximo_indice(alphabet) }}"
+
+# ------------------------------------------------------------------------------
+# ETAPA 2.1.2: CRIANDO ESTRUTURA DE CÓDIGO DO CLUSTER
+# ------------------------------------------------------------------------------
+
+# 1. Montar código completo do cluster (prefixo + número + índice)
 - name: Montando código do cluster
   ansible.builtin.set_fact:
     codigo_cluster: "{{ prefixo_cluster }}{{ numero_cluster }}{{ indice_cluster }}"
 
-# 4. Limpar espaços e caracteres indesejados
+# 2. Limpar espaços e caracteres indesejados
 - name: Normalizando código do cluster
   ansible.builtin.set_fact:
     codigo_cluster_limpo: "{{ codigo_cluster | trim | regex_replace('[\\s\"]', '') }}"
@@ -119,7 +127,7 @@
 # 2. Validar se o nome está no padrão esperado
 - name: Validando padrão do nome do cluster
   ansible.builtin.set_fact:
-    nome_cluster_valido: "{{ nome_cluster_gerado is match('^k8s(des|hml|prd)(bb1|bb2|az1|az2|gc1)([a-z][0-9]{2}[a-z])$') }}"
+    nome_cluster_valido: "{{ nome_cluster_gerado is match(regex_nome_cluster) }}"
 
 # 3. Definir o nome final do cluster apenas se válido
 - name: Definindo nome final do cluster

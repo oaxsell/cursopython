@@ -3,6 +3,21 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
+# VALIDAÇÕES INICIAIS - Criar variáveis de regex
+# ------------------------------------------------------------------------------
+- name: Definindo regex para código de aplicação
+  set_fact:
+    regex_codigo_aplicacao: "^[a-zA-Z]\\d{2}$"
+
+- name: Definindo regex para extração de dígitos
+  set_fact:
+    regex_extrair_digitos: '[^0-9]'
+
+- name: Definindo regex para remover letra inicial do código
+  set_fact:
+    regex_remover_letra_inicial: '^[a-zA-Z]'
+
+# ------------------------------------------------------------------------------
 # ETAPA 1.2.1: LER CONTEÚDO DO ARQUIVO DE CÓDIGOS DAS APLICAÇÕES
 # ------------------------------------------------------------------------------
 
@@ -40,7 +55,7 @@
   set_fact:
     todos_codigos_svc: "{{ serv_aplic_codigos
                           | map(attribute='code')
-                          | select('match', '^[a-zA-Z]\\d{2}$')
+                          | select('match', regex_codigo_aplicacao)
                           | unique
                           | sort
                           | list }}"
@@ -49,7 +64,7 @@
 - name: Listando os dígitos dos códigos das solucao-servico
   set_fact:
     todos_codigos_svc_numeros: "{{ todos_codigos_svc
-                                   | map('regex_replace', '[^0-9]', '')
+                                   | map('regex_replace', regex_extrair_digitos, '')
                                    | select('string')
                                    | select('!=', '')
                                    | map('int')
@@ -81,7 +96,7 @@
 # 7. Convertendo o último código em valor numérico (extraindo últimos dígitos)
 - name: Extraindo o último número dos códigos da solução-serviço
   set_fact:
-    ultimo_codigo_svc_numero: "{{ ultimo_codigo_svc_aplic | regex_replace('^[a-zA-Z]', '') | int }}"
+    ultimo_codigo_svc_numero: "{{ ultimo_codigo_svc_aplic | regex_replace(regex_remover_letra_inicial, '') | int }}"
 
 # 8. Exibir informações para debug (opcional - remover em produção)
 - name: Exibindo código gerado
