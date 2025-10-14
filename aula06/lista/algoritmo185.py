@@ -16,6 +16,8 @@ def escolher_arvore(jogador, arvore_correta):
     Args:
         jogador (str): Nome do jogador que está tentando adivinhar.
         arvore_correta (int): A árvore onde o marciano está escondido.
+    Returns:
+        bool: True se o jogador acertar a árvore correta, False caso contrário.
     """
     while True:
         arvore = int(input(f"{jogador}, escolha uma árvore entre 1 e 100: "))
@@ -34,7 +36,12 @@ def escolher_arvore(jogador, arvore_correta):
 def definir_arvore_correta(jogador):
     """
     Funcao onde o jogador escolhe a arvore correta onde o marciano esta escondido.
-    Ela recebe o nome do jogador e retorna o numero da arvore correta.  
+    Ela recebe o nome do jogador e retorna o numero da arvore correta.
+
+    Args:
+        jogador (str): Nome do jogador que está tentando adivinhar.
+    Returns:
+        int: A árvore onde o marciano está escondido.
     """
     while True:
         arvore = int(input(f"{jogador}, escolha uma árvore entre 1 e 100 para esconder o marciano: "))
@@ -48,10 +55,16 @@ def jogo():
 
     """
     Função principal do jogo.
-
+    Ela gerencia o fluxo do jogo, incluindo a escolha da árvore correta
+    pelo primeiro jogador e as tentativas do segundo jogador para acertar
+    a árvore onde o marciano está escondido.
+    
     Args:
-        jogador (str): Nome do jogador que está tentando adivinhar.
-        arvore_correta (int): A árvore onde o marciano está escondido.
+        None
+        
+    Returns:
+        None
+
     """
     print("Bem-vindo ao jogo do marciano!")
     print("O primeiro jogador escolhe a árvore onde o marciano está escondido.")
